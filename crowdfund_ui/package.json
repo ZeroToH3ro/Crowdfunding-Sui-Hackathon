@@ -10,6 +10,7 @@
     "lint": "eslint 'src/**/*.{js,jsx}'"
   },
   "dependencies": {
+    "@mysten/bcs": "^1.6.0",
     "@mysten/sui": "^1.28.0",
     "@suiet/wallet-kit": "^0.3.4",
     "@tailwindcss/vite": "^4.1.4",

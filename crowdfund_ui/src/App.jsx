@@ -5,7 +5,7 @@ import {
   useWallet,
 } from "@suiet/wallet-kit";
 import { Transaction } from '@mysten/sui/transactions';
-import { bcs } from '@mysten/sui/bcs';
+import { bcs } from "@mysten/bcs";
 
 import '@suiet/wallet-kit/style.css';
 
@@ -16,8 +16,6 @@ const PACKAGE_ID = "0x7119ffc2f24017f5f900f5184be47dad8f85b34584d02da749d58e2d3d
 const MODULE_NAME = "crowfunding";
 // Consider making the network configurable (e.g., devnet, testnet, mainnet)
 const SUI_NETWORK = 'sui:devnet';
-
-// No need to initialize BCS, it's already initialized in the import
 
 // --- Helper Function for BigInt Conversion ---
 // Sui `u64` values are often returned as strings, convert them safely
@@ -102,22 +100,31 @@ function App() {
 
       const txb = new Transaction();
 
-      // Create a simple transaction with direct arguments
-      const tx = {
-        kind: 'moveCall',
-        target: `${PACKAGE_ID}::${MODULE_NAME}::create_campaign`,
-        arguments: [
-          // Pass the values directly
-          Array.from(new TextEncoder().encode(campaignName)),
-          Array.from(new TextEncoder().encode(campaignDesc)),
-          goalAmount.toString(),
-          deadline.toString(),
-        ]
-      };
-      
-      // Add the transaction to the transaction block
-      txb.add(tx);
+      // Create a transaction with properly structured arguments
+      // Each argument must be an object created by txb methods
+      const nameBytes = new TextEncoder().encode(campaignName); // Uint8Array
+      const descBytes = new TextEncoder().encode(campaignDesc); // Uint8Array
 
+      // --- Serialize using the bcs.type().serialize() pattern ---
+
+      // Serialize vector<u8> for name
+      const ser_name = bcs.bytes().serialize(nameBytes).toBytes();
+
+      // Serialize vector<u8> for description
+      const ser_desc = bcs.bytes().serialize(descBytes).toBytes();
+
+      // Serialize u64 for goal
+      // Pass the BigInt directly as shown in the example (1000000n)
+      const ser_goal = bcs.u64().serialize(goalAmount).toBytes();
+
+      // Serialize u64 for deadline
+      const ser_deadline = bcs.u64().serialize(deadline).toBytes();
+
+      console.log(ser_name, ser_desc, ser_goal, ser_deadline);
+      txb.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_NAME}::create_campaign`,
+        arguments: [ser_name, ser_desc, ser_goal, ser_deadline]
+      });
       console.log('Transaction:', txb);
       const result = await wallet.signAndExecuteTransaction({
         Transaction: txb,
@@ -169,7 +176,8 @@ function App() {
       const txb = new Transaction();
 
       // 1. Split the required SUI amount from the user's coins
-      const [coin] = txb.splitCoins(txb.gas, [amountSui.toString()]);
+      const amountArg = txb.object({ Pure: { value: amountSui.toString(), type: "u64" } });
+      const [coin] = txb.splitCoins(txb.gas, [amountArg]);
 
       // 2. Call the donate function
       txb.moveCall({
