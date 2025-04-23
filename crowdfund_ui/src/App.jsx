@@ -5,7 +5,7 @@ import {
   useWallet,
 } from "@suiet/wallet-kit";
 import { Transaction } from '@mysten/sui/transactions';
-import { bcs } from "@mysten/bcs";
+import { BCS, getSuiMoveConfig } from "@mysten/bcs";
 
 import '@suiet/wallet-kit/style.css';
 
@@ -39,12 +39,12 @@ function App() {
   // --- State for Creating Campaign ---
   const [campaignName, setCampaignName] = useState('');
   const [campaignDesc, setCampaignDesc] = useState('');
-  const [campaignGoal, setCampaignGoal] = useState(''); // Store as string initially
-  const [campaignDeadlineEpochs, setCampaignDeadlineEpochs] = useState(''); // Store as string
+  const [campaignGoal, setCampaignGoal] = useState(0); // Store as string initially
+  const [campaignDeadlineEpochs, setCampaignDeadlineEpochs] = useState(0); // Store as string
 
   // --- State for Interacting with Campaign ---
   const [interactionCampaignId, setInteractionCampaignId] = useState('');
-  const [donationAmount, setDonationAmount] = useState(''); // Store as string
+  const [donationAmount, setDonationAmount] = useState(0); // Store as string
   const [creatorCapId, setCreatorCapId] = useState(''); // Needed for claiming
   const [campaignDetails, setCampaignDetails] = useState(null);
 
@@ -89,8 +89,8 @@ function App() {
 
     try {
       console.log("Campaign details:", campaignName, campaignDesc, campaignGoal, campaignDeadlineEpochs);
-      const goalAmount = BigInt(campaignGoal); // Convert goal to BigInt
-      const deadline = BigInt(campaignDeadlineEpochs); // Convert deadline to BigInt
+      const goalAmount = BigInt(campaignGoal);
+      const deadline = BigInt(campaignDeadlineEpochs);
 
       if (goalAmount <= 0 || deadline <= 0) {
           showMessage("Goal and Deadline Epochs must be positive numbers.", true);
@@ -99,7 +99,7 @@ function App() {
       }
 
       const txb = new Transaction();
-
+      const bcs = new BCS(getSuiMoveConfig());
       // Create a transaction with properly structured arguments
       // Each argument must be an object created by txb methods
       const nameBytes = new TextEncoder().encode(campaignName); // Uint8Array
@@ -108,26 +108,29 @@ function App() {
       // --- Serialize using the bcs.type().serialize() pattern ---
 
       // Serialize vector<u8> for name
-      const ser_name = bcs.bytes().serialize(nameBytes).toBytes();
+      const ser_name = bcs.ser("vector<u8>", nameBytes).toBytes();
 
       // Serialize vector<u8> for description
-      const ser_desc = bcs.bytes().serialize(descBytes).toBytes();
+      const ser_desc = bcs.ser("vector<u8>", descBytes).toBytes();
 
       // Serialize u64 for goal
       // Pass the BigInt directly as shown in the example (1000000n)
-      const ser_goal = bcs.u64().serialize(goalAmount).toBytes();
+      const ser_goal = (bcs.ser(BCS.U64, goalAmount)).toBytes();
 
       // Serialize u64 for deadline
-      const ser_deadline = bcs.u64().serialize(deadline).toBytes();
+      const ser_deadline = (bcs.ser(BCS.U64, deadline)).toBytes();
 
-      console.log(ser_name, ser_desc, ser_goal, ser_deadline);
       txb.moveCall({
         target: `${PACKAGE_ID}::${MODULE_NAME}::create_campaign`,
-        arguments: [ser_name, ser_desc, ser_goal, ser_deadline]
+        arguments: [
+          txb.pure(ser_name, 'vector<u8>'),
+          txb.pure(ser_desc, 'vector<u8>'),
+          txb.pure(ser_goal, 'u64'),
+          txb.pure(ser_deadline, 'u64')
+        ]
       });
-      console.log('Transaction:', txb);
-      const result = await wallet.signAndExecuteTransaction({
-        Transaction: txb,
+      const result = await wallet.signAndExecuteTransactionBlock({
+        transactionBlock: txb,
         options: { showEffects: true }, // Optional: To get object IDs created
       });
 
@@ -139,8 +142,8 @@ function App() {
       // Clear form
       setCampaignName('');
       setCampaignDesc('');
-      setCampaignGoal('');
-      setCampaignDeadlineEpochs('');
+      setCampaignGoal(0);
+      setCampaignDeadlineEpochs(0);
 
     } catch (err) {
       console.error("Create campaign failed:", err);
@@ -436,7 +439,7 @@ function App() {
                 value={campaignGoal}
                 onChange={(e) => setCampaignGoal(e.target.value)}
                 placeholder="e.g., 1000000000 (for 1 SUI)"
-                 min="1"
+                min="1"
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 required
               />
