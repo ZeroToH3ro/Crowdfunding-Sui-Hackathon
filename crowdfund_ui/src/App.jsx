@@ -11,7 +11,7 @@ import '@suiet/wallet-kit/style.css';
 
 // --- Configuration ---
 // Replace with your deployed package ID
-const PACKAGE_ID = "0x7119ffc2f24017f5f900f5184be47dad8f85b34584d02da749d58e2d3d9c16da";
+const PACKAGE_ID = "0xd111a541d355155f7396c31d66bd87445cfcb5144b22e466bc49ffc2448b666d";
 // Replace if your module name is different
 const MODULE_NAME = "crowfunding";
 // Consider making the network configurable (e.g., devnet, testnet, mainnet)
@@ -88,7 +88,7 @@ function App() {
     setSuccessMessage(null);
 
     try {
-      console.log("Campaign details:", campaignName, campaignDesc, campaignGoal, campaignDeadlineEpochs);
+      // console.log("Campaign details:", campaignName, campaignDesc, campaignGoal, campaignDeadlineEpochs);
       const goalAmount = BigInt(campaignGoal);
       const deadline = BigInt(campaignDeadlineEpochs);
 
@@ -99,36 +99,27 @@ function App() {
       }
 
       const txb = new Transaction();
+      txb.setGasBudget(100000000);
+
+      // Properly serialize vectors using BCS for Sui SDK v1.28.0
       const bcs = new BCS(getSuiMoveConfig());
-      // Create a transaction with properly structured arguments
-      // Each argument must be an object created by txb methods
-      const nameBytes = new TextEncoder().encode(campaignName); // Uint8Array
-      const descBytes = new TextEncoder().encode(campaignDesc); // Uint8Array
-
-      // --- Serialize using the bcs.type().serialize() pattern ---
-
-      // Serialize vector<u8> for name
-      const ser_name = bcs.ser("vector<u8>", nameBytes).toBytes();
-
-      // Serialize vector<u8> for description
-      const ser_desc = bcs.ser("vector<u8>", descBytes).toBytes();
-
-      // Serialize u64 for goal
-      // Pass the BigInt directly as shown in the example (1000000n)
-      const ser_goal = (bcs.ser(BCS.U64, goalAmount)).toBytes();
-
-      // Serialize u64 for deadline
-      const ser_deadline = (bcs.ser(BCS.U64, deadline)).toBytes();
-
+      
+      // Serialize the strings as vector<u8> for Move
+      const serializedName = bcs.ser('vector<u8>', Array.from(new TextEncoder().encode(campaignName))).toBytes();
+      const serializedDesc = bcs.ser('vector<u8>', Array.from(new TextEncoder().encode(campaignDesc))).toBytes();
+      
       txb.moveCall({
         target: `${PACKAGE_ID}::${MODULE_NAME}::create_campaign`,
         arguments: [
-          txb.pure(ser_name, 'vector<u8>'),
-          txb.pure(ser_desc, 'vector<u8>'),
-          txb.pure(ser_goal, 'u64'),
-          txb.pure(ser_deadline, 'u64')
-        ]
+          // Now pass the serialized BCS values with their types
+          txb.pure('vector<u8>', serializedName),
+          txb.pure('vector<u8>', serializedDesc),
+          txb.pure.u64(goalAmount),
+          txb.pure.u64(deadline)
+        ],
+        typeArguments: []
       });
+
       const result = await wallet.signAndExecuteTransactionBlock({
         transactionBlock: txb,
         options: { showEffects: true }, // Optional: To get object IDs created
@@ -177,10 +168,10 @@ function App() {
       }
 
       const txb = new Transaction();
+      txb.setGasBudget(100000000); // Set a gas budget for consistency
 
       // 1. Split the required SUI amount from the user's coins
-      const amountArg = txb.object({ Pure: { value: amountSui.toString(), type: "u64" } });
-      const [coin] = txb.splitCoins(txb.gas, [amountArg]);
+      const [coin] = txb.splitCoins(txb.gas, [txb.pure.u64(amountSui)]);
 
       // 2. Call the donate function
       txb.moveCall({
@@ -191,8 +182,9 @@ function App() {
         ],
       });
 
-      const result = await wallet.signAndExecuteTransaction({
-        Transaction: txb,
+      const result = await wallet.signAndExecuteTransactionBlock({
+        transactionBlock: txb,
+        options: { showEffects: true },
       });
 
       console.log("Donate result:", result);
@@ -225,6 +217,7 @@ function App() {
 
       try {
           const txb = new Transaction();
+          txb.setGasBudget(100000000);
 
           txb.moveCall({
               target: `${PACKAGE_ID}::${MODULE_NAME}::claim_funds`,
@@ -234,8 +227,9 @@ function App() {
               ],
           });
 
-          const result = await wallet.signAndExecuteTransaction({
-              Transaction: txb,
+          const result = await wallet.signAndExecuteTransactionBlock({
+              transactionBlock: txb,
+              options: { showEffects: true },
           });
 
           console.log("Claim funds result:", result);
@@ -267,6 +261,7 @@ function App() {
 
       try {
           const txb = new Transaction();
+          txb.setGasBudget(100000000);
 
           txb.moveCall({
               target: `${PACKAGE_ID}::${MODULE_NAME}::request_refund`,
@@ -275,8 +270,9 @@ function App() {
               ],
           });
 
-          const result = await wallet.signAndExecuteTransaction({
-              Transaction: txb,
+          const result = await wallet.signAndExecuteTransactionBlock({
+              transactionBlock: txb,
+              options: { showEffects: true },
           });
 
           console.log("Request refund result:", result);
