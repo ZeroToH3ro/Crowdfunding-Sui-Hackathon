@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@mysten/bcs": "^0.6.1",
-    "@mysten/sui": "^1.28.0",
-    "@suiet/wallet-kit": "^0.3.4",
+    "@mysten/sui": "^1.29.0",
+    "@suiet/wallet-kit": "^0.3.7",
     "@tailwindcss/vite": "^4.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

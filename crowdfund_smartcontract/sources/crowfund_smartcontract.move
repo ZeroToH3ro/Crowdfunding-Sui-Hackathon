@@ -55,8 +55,8 @@ module crowfund_smartcontract::crowdfunding {
 
     /// Creates a new crowdfunding campaign
     public entry fun create_campaign(
-        name: vector<u8>,
-        description: vector<u8>,
+        name: String,
+        description: String,
         goal: u64,
         deadline_epochs: u64,
         ctx: &mut TxContext
@@ -72,8 +72,8 @@ module crowfund_smartcontract::crowdfunding {
             deadline: current_epoch + deadline_epochs,
             raised_amount: balance::zero<SUI>(), // Use SUI type alias
             claimed: false,
-            name: string::utf8(name),
-            description: string::utf8(description),
+            name: name,
+            description: description,
             donations: table::new<address, u64>(ctx),
         };
 

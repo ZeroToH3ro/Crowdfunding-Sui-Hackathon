@@ -11,9 +11,9 @@ import '@suiet/wallet-kit/style.css';
 
 // --- Configuration ---
 // Replace with your deployed package ID
-const PACKAGE_ID = "0xd111a541d355155f7396c31d66bd87445cfcb5144b22e466bc49ffc2448b666d";
+const PACKAGE_ID = "0x1f100a3fdfef29ff4b0a691e007d493cbccf13dd949e4973bd63082d609137d1";
 // Replace if your module name is different
-const MODULE_NAME = "crowfunding";
+const MODULE_NAME = "crowdfunding";
 // Consider making the network configurable (e.g., devnet, testnet, mainnet)
 const SUI_NETWORK = 'sui:devnet';
 
@@ -101,28 +101,21 @@ function App() {
       const txb = new Transaction();
       txb.setGasBudget(100000000);
 
-      // Properly serialize vectors using BCS for Sui SDK v1.28.0
-      const bcs = new BCS(getSuiMoveConfig());
-      
-      // Serialize the strings as vector<u8> for Move
-      const serializedName = bcs.ser('vector<u8>', Array.from(new TextEncoder().encode(campaignName))).toBytes();
-      const serializedDesc = bcs.ser('vector<u8>', Array.from(new TextEncoder().encode(campaignDesc))).toBytes();
-      
+      // Use String type directly instead of manually serializing to vector<u8>
       txb.moveCall({
         target: `${PACKAGE_ID}::${MODULE_NAME}::create_campaign`,
         arguments: [
-          // Now pass the serialized BCS values with their types
-          txb.pure('vector<u8>', serializedName),
-          txb.pure('vector<u8>', serializedDesc),
-          txb.pure.u64(goalAmount),
-          txb.pure.u64(deadline)
+          // Pass strings directly since the contract now accepts String type
+          txb.pure.string(campaignName),
+          txb.pure.string(campaignDesc),
+          txb.pure.u64(goalAmount.toString()), // Convert to string for Sui
+          txb.pure.u64(deadline.toString()), // Convert to string for Sui
         ],
         typeArguments: []
       });
 
       const result = await wallet.signAndExecuteTransactionBlock({
         transactionBlock: txb,
-        options: { showEffects: true }, // Optional: To get object IDs created
       });
 
       console.log("Create campaign result:", result);
