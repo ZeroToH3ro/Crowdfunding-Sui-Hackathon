@@ -1,9 +1,8 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { formatSUI, calculateProgress, truncateAddress } from '../../utils/formatters';
+import { formatSUI, truncateAddress } from '../../utils/formatters';
 
 export default function CampaignCard({ campaign, onViewDetails }) {
-  const progressPercent = calculateProgress(campaign.raised_amount, campaign.goal);
 
   return (
     <div 
@@ -16,7 +15,7 @@ export default function CampaignCard({ campaign, onViewDetails }) {
         </div>
         
         <div className="mb-4 h-24 overflow-hidden">
-          <p className="text-gray-600 text-sm line-clamp-4">
+          <p className="text-gray-600 text-sm line-clamp-3">
             {campaign.description}
           </p>
         </div>
@@ -25,18 +24,6 @@ export default function CampaignCard({ campaign, onViewDetails }) {
           <div className="flex justify-between text-sm mb-1">
             <span className="font-medium">Campaign Goal</span>
             <span className="text-gray-700">{formatSUI(campaign.goal)} SUI</span>
-          </div>
-          
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
-            <div 
-              className="bg-blue-600 h-2.5 rounded-full" 
-              style={{ width: `${progressPercent}%` }}
-            ></div>
-          </div>
-          
-          <div className="flex justify-between text-xs mt-1 text-gray-500">
-            <span>{progressPercent}% Funded</span>
-            <span>{formatSUI(campaign.raised_amount)} SUI raised</span>
           </div>
         </div>
         
