@@ -5,32 +5,20 @@ import {
   useWallet,
 } from "@suiet/wallet-kit";
 import { Transaction } from '@mysten/sui/transactions';
-import { BCS, getSuiMoveConfig } from "@mysten/bcs";
-
 import '@suiet/wallet-kit/style.css';
-
+import { useSuiClient } from "@mysten/dapp-kit";
 // --- Configuration ---
 // Replace with your deployed package ID
-const PACKAGE_ID = "0x1f100a3fdfef29ff4b0a691e007d493cbccf13dd949e4973bd63082d609137d1";
+const PACKAGE_ID = "0x230fa32c5ddba4c75ca8299b8b2c5ac762d04051984f681ef36ec86bf6ba2092";
 // Replace if your module name is different
 const MODULE_NAME = "crowdfunding";
 // Consider making the network configurable (e.g., devnet, testnet, mainnet)
-const SUI_NETWORK = 'sui:devnet';
 
-// --- Helper Function for BigInt Conversion ---
-// Sui `u64` values are often returned as strings, convert them safely
-function safeBigInt(value) {
-  try {
-    return BigInt(value);
-  } catch (e) {
-    console.error("Error converting to BigInt:", value, e);
-    return BigInt(0); // Return 0 or handle appropriately
-  }
-}
 
-// --- Main App Component ---
 function App() {
   const wallet = useWallet();
+  const client = useSuiClient();
+  console.log("Wallet connected:", wallet.connected);
   const { balance } = useAccountBalance();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -99,7 +87,7 @@ function App() {
       }
 
       const txb = new Transaction();
-      txb.setGasBudget(100000000);
+      txb.setGasBudget(10000000);
 
       // Use String type directly instead of manually serializing to vector<u8>
       txb.moveCall({
@@ -116,6 +104,7 @@ function App() {
 
       const result = await wallet.signAndExecuteTransactionBlock({
         transactionBlock: txb,
+        options: { showEffects: true },
       });
 
       console.log("Create campaign result:", result);
@@ -281,82 +270,78 @@ function App() {
   };
 
   // --- Function to Fetch Campaign Details ---
-  // NOTE: This uses wallet.devInspectTransaction which is good for reads
-  // but might not reflect the absolute latest state if many transactions are happening.
-  // For production, consider an indexer or API.
   const fetchCampaignDetails = async () => {
     if (!wallet.connected || !interactionCampaignId) {
-      // Don't show error if just missing ID, clear details instead
-       if (!interactionCampaignId) setCampaignDetails(null);
-       else showMessage("Please connect wallet and enter Campaign ID.", true);
+      if (!interactionCampaignId) setCampaignDetails(null);
+      else showMessage("Please connect wallet and enter Campaign ID.", true);
       return;
     }
 
     setLoading(true);
     setError(null);
-    setCampaignDetails(null); // Clear previous details
+    setCampaignDetails(null);
+
+    console.log("Wallet connected:", wallet.connected);
+    console.log("Wallet account:", wallet.account);
+    console.log("Wallet chain:", wallet.chain);
+    console.log("Wallet network:", wallet.network);
+    console.log("PACKAGE_ID:", PACKAGE_ID);
+    console.log("MODULE_NAME:", MODULE_NAME);
+    console.log("interactionCampaignId:", interactionCampaignId);
 
     try {
       const txb = new Transaction();
-      // Call the getter function - adjust if your getter has a different name
+      txb.setGasBudget(15000000); // Increased gas budget for safety
+
       txb.moveCall({
-        target: `${PACKAGE_ID}::${MODULE_NAME}::get_campaign_details`,
+        target: `${PACKAGE_ID}::${MODULE_NAME}::get_campaign_details_by_id`,
         arguments: [txb.object(interactionCampaignId)],
       });
 
-      // Use devInspectTransaction for read-only calls
-      const result = await wallet.devInspectTransaction({
-          Transaction: txb,
-          // sender: wallet.account.address // Sender is required for devInspect
+      const result = await wallet.signAndExecuteTransactionBlock({
+        transactionBlock: txb,
+        options: {
+          showEffects: true,
+          showEvents: true,
+          showInput: true,
+          showObjectChanges: true,
+          showBalanceChanges: true,
+        },
       });
 
-      console.log("Dev inspect result:", result);
+      console.log("Transaction result:", JSON.stringify(result, null, 2));
 
-      if (result.effects?.status?.status !== 'success') {
-          throw new Error(`Failed to fetch details: ${result.effects?.status?.error || 'Unknown error'}`);
+      // Query events using SuiClient
+      const transactionDigest = result.digest;
+      const eventsResult = await client.queryEvents({
+        query: { Transaction: transactionDigest },
+      });
+
+      console.log("Fetched events:", JSON.stringify(eventsResult, null, 2));
+
+      // Find the CampaignDetailsEvent
+      const detailsEvent = eventsResult.data.find(event =>
+        event.type.includes('CampaignDetailsEvent')
+      );
+
+      if (detailsEvent && detailsEvent.parsedJson) {
+        const eventData = detailsEvent.parsedJson;
+        const details = {
+          creator: eventData.creator || "",
+          goal: eventData.goal ? String(eventData.goal) : '0',
+          raised_amount: eventData.raised_amount ? String(eventData.raised_amount) : '0',
+          deadline: eventData.deadline ? String(eventData.deadline) : '0',
+          claimed: eventData.claimed === true,
+          name: eventData.name || "",
+          description: eventData.description || "",
+        };
+
+        console.log("Parsed campaign details:", details);
+        setCampaignDetails(details);
+        setSuccessMessage("Campaign details loaded successfully!");
+      } else {
+        throw new Error("Campaign details event not found");
       }
-
-      // --- Parsing the result ---
-      // The structure of `results` or `returnValues` depends on the Sui SDK version and the call.
-      // Inspect the `result` object in your browser console to find the correct path.
-      // This is a common structure, but might need adjustment:
-      if (result.results && result.results[0]?.returnValues?.length > 0) {
-          const values = result.results[0].returnValues;
-
-          // Assuming the return order matches the getter: (creator, goal, raised, deadline, claimed, name, desc)
-          // Type mapping: 0: address (string), 1: u64 (string), 2: u64 (string), 3: u64 (string), 4: bool, 5: String (vector<u8>), 6: String (vector<u8>)
-          const details = {
-              creator: values[0]?.[0], // Address might be nested
-              goal: values[1] ? safeBigInt(values[1][0]).toString() : '0',
-              raised_amount: values[2] ? safeBigInt(values[2][0]).toString() : '0',
-              deadline: values[3] ? safeBigInt(values[3][0]).toString() : '0',
-              claimed: values[4]?.[0] === 1, // Boolean might be 1 (true) or 0 (false)
-              name: values[5]?.[0] ? new TextDecoder().decode(Uint8Array.from(values[5][0])) : 'N/A',
-              description: values[6]?.[0] ? new TextDecoder().decode(Uint8Array.from(values[6][0])) : 'N/A',
-              // Add donor count and specific donation if needed by calling other getters
-          };
-          setCampaignDetails(details);
-          setSuccessMessage("Campaign details loaded.");
-
-      } else if (result.returnValues?.length > 0) { // Alternative structure sometimes seen
-           const values = result.returnValues;
-           const details = {
-              creator: values[0]?.[0],
-              goal: values[1] ? safeBigInt(values[1][0]).toString() : '0',
-              raised_amount: values[2] ? safeBigInt(values[2][0]).toString() : '0',
-              deadline: values[3] ? safeBigInt(values[3][0]).toString() : '0',
-              claimed: values[4]?.[0] === 1,
-              name: values[5]?.[0] ? new TextDecoder().decode(Uint8Array.from(values[5][0])) : 'N/A',
-              description: values[6]?.[0] ? new TextDecoder().decode(Uint8Array.from(values[6][0])) : 'N/A',
-          };
-          setCampaignDetails(details);
-          setSuccessMessage("Campaign details loaded.");
-      }
-       else {
-          console.error("Unexpected result structure:", result);
-          throw new Error("Could not parse campaign details from the result.");
-      }
-
 
     } catch (err) {
       console.error("Fetch details failed:", err);
@@ -366,8 +351,6 @@ function App() {
       setLoading(false);
     }
   };
-
-
   // --- Render UI ---
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 font-sans p-4 md:p-8">

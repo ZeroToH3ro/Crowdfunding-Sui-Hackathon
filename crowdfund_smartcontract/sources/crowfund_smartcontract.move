@@ -11,6 +11,7 @@ module crowfund_smartcontract::crowdfunding {
     use std::string::{Self, String};
     // Import SUI type for clarity
     use sui::sui::SUI;
+    use sui::event;
 
     // ========= Constants =========
 
@@ -49,6 +50,20 @@ module crowfund_smartcontract::crowdfunding {
     public struct CreatorCap has key, store {
         id: UID,
         campaign_id: ID,
+    }
+
+    // ========= Events =========
+
+    /// Event emitted when campaign details are queried
+    public struct CampaignDetailsEvent has copy, drop {
+        campaign_id: ID,
+        creator: address,
+        goal: u64,
+        raised_amount: u64,
+        deadline: u64,
+        claimed: bool,
+        name: String,
+        description: String
     }
 
     // ========= Public Functions =========
@@ -165,6 +180,22 @@ module crowfund_smartcontract::crowdfunding {
         // --- End coin::split refund logic ---
     }
 
+    /// Function to emit campaign details as an event
+    public entry fun get_campaign_details_by_id(campaign: &Campaign) {
+        let campaign_details_event = CampaignDetailsEvent {
+            campaign_id: object::id(campaign),
+            creator: campaign.creator,
+            goal: campaign.goal,
+            raised_amount: balance::value(&campaign.raised_amount),
+            deadline: campaign.deadline,
+            claimed: campaign.claimed,
+            name: campaign.name,
+            description: campaign.description
+        };
+        
+        // Emit the event
+        event::emit(campaign_details_event);
+    }
 
     // --- Test Helper Function Removed ---
 
