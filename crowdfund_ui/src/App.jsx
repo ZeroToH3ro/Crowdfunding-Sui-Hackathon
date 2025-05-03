@@ -9,7 +9,7 @@ import '@suiet/wallet-kit/style.css';
 import { useSuiClient } from "@mysten/dapp-kit";
 // --- Configuration ---
 // Replace with your deployed package ID
-const PACKAGE_ID = "0x230fa32c5ddba4c75ca8299b8b2c5ac762d04051984f681ef36ec86bf6ba2092";
+const PACKAGE_ID = "0x2af730d2e6f7e36f658bd8cc4047260876afa582319fb7a3d151c94166703318";
 // Replace if your module name is different
 const MODULE_NAME = "crowdfunding";
 // Consider making the network configurable (e.g., devnet, testnet, mainnet)
@@ -35,6 +35,9 @@ function App() {
   const [donationAmount, setDonationAmount] = useState(0); // Store as string
   const [creatorCapId, setCreatorCapId] = useState(''); // Needed for claiming
   const [campaignDetails, setCampaignDetails] = useState(null);
+
+  // --- State for All Campaigns ---
+  const [allCampaigns, setAllCampaigns] = useState([]);
 
   // --- Clear messages on wallet change ---
   useEffect(() => {
@@ -281,14 +284,6 @@ function App() {
     setError(null);
     setCampaignDetails(null);
 
-    console.log("Wallet connected:", wallet.connected);
-    console.log("Wallet account:", wallet.account);
-    console.log("Wallet chain:", wallet.chain);
-    console.log("Wallet network:", wallet.network);
-    console.log("PACKAGE_ID:", PACKAGE_ID);
-    console.log("MODULE_NAME:", MODULE_NAME);
-    console.log("interactionCampaignId:", interactionCampaignId);
-
     try {
       const txb = new Transaction();
       txb.setGasBudget(15000000); // Increased gas budget for safety
@@ -316,8 +311,6 @@ function App() {
       const eventsResult = await client.queryEvents({
         query: { Transaction: transactionDigest },
       });
-
-      console.log("Fetched events:", JSON.stringify(eventsResult, null, 2));
 
       // Find the CampaignDetailsEvent
       const detailsEvent = eventsResult.data.find(event =>
@@ -351,7 +344,196 @@ function App() {
       setLoading(false);
     }
   };
+
+  // --- Function to Fetch All Campaigns ---
+  const fetchAllCampaigns = async () => {
+    if (!wallet.connected || !client) {
+      showMessage("Please connect your wallet first.", true);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Define the module address
+      const packageId = PACKAGE_ID;
+
+      // Query for campaign creation events since the beginning
+      const eventsResult = await client.queryEvents({
+        query: {
+          MoveEventType: `${packageId}::${MODULE_NAME}::CampaignCreatedEvent`
+        },
+        limit: 50, // Adjust based on how many campaigns you want to load
+      });
+
+      console.log("Campaign events:", eventsResult);
+
+      if (eventsResult.data && eventsResult.data.length > 0) {
+        // Process the campaign events into a usable format
+        const campaigns = eventsResult.data.map(event => {
+          const data = event.parsedJson;
+          return {
+            id: data.campaign_id,
+            creator: data.creator,
+            goal: String(data.goal),
+            deadline: String(data.deadline),
+            name: data.name,
+            description: data.description,
+            // These fields will be loaded when a specific campaign is selected
+            raised_amount: '0',
+            claimed: false,
+          };
+        });
+
+        console.log("Processed campaigns:", campaigns);
+        setAllCampaigns(campaigns);
+        setSuccessMessage(`Loaded ${campaigns.length} campaigns`);
+      } else {
+        setAllCampaigns([]);
+        setSuccessMessage("No campaigns found");
+      }
+    } catch (err) {
+      console.error("Error fetching campaigns:", err);
+      showMessage(`Failed to fetch campaigns: ${err.message}`, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Effect to load campaigns on wallet connection ---
+  useEffect(() => {
+    if (wallet.connected) {
+      fetchAllCampaigns();
+    }
+  }, [wallet.connected]);
+
   // --- Render UI ---
+  const renderCampaignList = () => {
+    if (allCampaigns.length === 0) {
+      return (
+        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m0 16v1m-9-9h1m3.343-3.343l.707.707M12 14.5c-1.4 0-2.5-1.1-2.5-2.5 0-1.4 1.1-2.5 2.5-2.5 1.4 0 2.5 1.1 2.5 2.5 0 1.4-1.1 2.5-2.5 2.5z" />
+          </svg>
+          <p className="mt-4 text-gray-600">No campaigns found</p>
+          <button 
+            onClick={fetchAllCampaigns} 
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
+            disabled={loading}
+          >
+            {loading ? 'Searching...' : 'Search for Campaigns'}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-indigo-600">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold text-white">All Campaigns</h2>
+            <button 
+              className="flex items-center px-3 py-1 bg-white text-blue-600 text-sm font-medium rounded-full hover:bg-blue-50 transition" 
+              onClick={fetchAllCampaigns}
+              disabled={loading}
+            >
+              {loading ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-gray-50">
+          {allCampaigns.map(campaign => {
+            // Calculate progress percentage
+            const goalAmount = Number(campaign.goal);
+            const raisedAmount = Number(campaign.raised_amount) || 0;
+            const progressPercent = goalAmount > 0 ? Math.min(100, Math.round((raisedAmount / goalAmount) * 100)) : 0;
+            
+            return (
+              <div 
+                key={campaign.id} 
+                className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition duration-300"
+              >
+                <div className="p-5">
+                  <div className="mb-2 flex justify-between items-start">
+                    <h3 className="text-xl font-bold text-gray-800 truncate">{campaign.name}</h3>
+                    <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded-full">Epoch {campaign.deadline}</span>
+                  </div>
+                  
+                  <div className="mb-4 h-24 overflow-hidden">
+                    <p className="text-gray-600 text-sm line-clamp-4">
+                      {campaign.description}
+                    </p>
+                  </div>
+                  
+                  <div className="mb-2">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-medium">Campaign Goal</span>
+                      <span className="text-gray-700">{(Number(campaign.goal) / 1_000_000_000).toFixed(2)} SUI</span>
+                    </div>
+                    
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div 
+                        className="bg-blue-600 h-2.5 rounded-full" 
+                        style={{ width: `${progressPercent}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex justify-between text-xs mt-1 text-gray-500">
+                      <span>{progressPercent}% Funded</span>
+                      <span>{(raisedAmount / 1_000_000_000).toFixed(2)} SUI raised</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mt-4">
+                    <div className="text-xs text-gray-500">
+                      <span className="block">Created by:</span>
+                      <span className="truncate block w-20">{campaign.creator.substring(0, 8)}...</span>
+                    </div>
+                    
+                    <button 
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition"
+                      onClick={() => {
+                        setInteractionCampaignId(campaign.id);
+                        fetchCampaignDetails();
+                      }}
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {allCampaigns.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="text-sm text-gray-500 text-center">
+              Showing {allCampaigns.length} campaign{allCampaigns.length !== 1 && 's'}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 font-sans p-4 md:p-8">
       <header className="flex justify-between items-center mb-8 pb-4 border-b border-gray-300">
@@ -545,6 +727,9 @@ function App() {
           </div>
         </section>
       </div>
+
+      {/* Campaign list */}
+      {wallet.connected && renderCampaignList()}
     </div>
   );
 }

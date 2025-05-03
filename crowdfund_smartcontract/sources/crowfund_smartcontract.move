@@ -66,6 +66,21 @@ module crowfund_smartcontract::crowdfunding {
         description: String
     }
 
+    /// Event emitted when a campaign is created
+    public struct CampaignCreatedEvent has copy, drop {
+        campaign_id: ID,
+        creator: address,
+        goal: u64,
+        deadline: u64,
+        name: String,
+        description: String
+    }
+
+    /// Event for listing all campaigns
+    public struct CampaignListingEvent has copy, drop {
+        campaign_ids: vector<ID>
+    }
+
     // ========= Public Functions =========
 
     /// Creates a new crowdfunding campaign
@@ -96,6 +111,17 @@ module crowfund_smartcontract::crowdfunding {
             id: object::new(ctx),
             campaign_id: object::id(&campaign)
         };
+
+        // Emit campaign created event
+        event::emit(CampaignCreatedEvent {
+            campaign_id: object::id(&campaign),
+            creator: sender,
+            goal: goal,
+            deadline: current_epoch + deadline_epochs,
+            name: name,
+            description: description
+        });
+        
         transfer::public_transfer(creator_cap, sender);
         transfer::public_share_object(campaign);
     }
