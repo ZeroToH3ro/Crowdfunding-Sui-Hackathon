@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CampaignDetails from '../Campaign/CampaignDetails';
 import DonateForm from './DonateForm';
 import ClaimForm from './ClaimForm';
@@ -11,16 +11,13 @@ export default function CampaignInteractionSection({
   setLoading,
   showMessage,
   campaignDetails,
-  fetchCampaignDetails 
+  fetchCampaignDetails,
+  registerViewDetailsHandler // New prop
 }) {
   const [interactionCampaignId, setInteractionCampaignId] = useState('');
 
   const handleCampaignIdChange = (e) => {
     setInteractionCampaignId(e.target.value);
-    // Clear details when ID changes
-    if (campaignDetails) {
-      // setCampaignDetails(null);
-    }
   };
 
   const handleLoadDetails = () => {
@@ -28,6 +25,15 @@ export default function CampaignInteractionSection({
       fetchCampaignDetails(interactionCampaignId);
     }
   };
+
+  useEffect(() => {
+    if (registerViewDetailsHandler) {
+      const updateCampaignId = (campaignId) => {
+        setInteractionCampaignId(campaignId);
+      };
+      registerViewDetailsHandler(updateCampaignId);
+    }
+  }, [registerViewDetailsHandler]);
 
   return (
     <section className="bg-white p-6 rounded-lg shadow-md">

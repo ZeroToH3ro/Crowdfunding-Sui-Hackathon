@@ -61,7 +61,7 @@ export default function CampaignList({ campaigns, loading, fetchAllCampaigns, on
             <CampaignCard 
                 key={campaign.id} 
                 campaign={campaign} 
-                onViewDetails={onViewDetails} 
+                onViewDetails={(id) => onViewDetails(id)} 
             />
             ))}
         </div>

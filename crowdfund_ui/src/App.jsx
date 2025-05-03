@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useAccountBalance, useWallet } from "@suiet/wallet-kit";
 import '@suiet/wallet-kit/style.css';
 import { useSuiClient } from "@mysten/dapp-kit";
@@ -18,26 +18,34 @@ function App() {
   const wallet = useWallet();
   const client = useSuiClient();
   const { balance } = useAccountBalance();
-  
-  // Custom hooks
   const { loading, setLoading, error, successMessage, showMessage } = useMessages();
-  const { campaignDetails, setCampaignDetails, fetchCampaignDetails } = useCampaign(wallet, client, showMessage);
+  const { campaignDetails, fetchCampaignDetails } = useCampaign(wallet, client, showMessage);
   const { allCampaigns, fetchAllCampaigns } = useCampaignList(wallet, client, showMessage);
+  const [viewDetailsHandler] = useState(null);
+  const interactionCampaignIdRef = useRef(null);
   
-  // Clear messages on wallet change
+  const handleViewDetails = (campaignId) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    if (interactionCampaignIdRef.current) {
+      interactionCampaignIdRef.current(campaignId);
+    }
+    
+    fetchCampaignDetails(campaignId);
+  };
+
+  const registerViewDetailsHandler = useCallback((handler) => {
+    interactionCampaignIdRef.current = handler;
+  }, []);;
   useEffect(() => {
     if (wallet.account) {
       showMessage(`Wallet connected: ${wallet.account.address.substring(0, 10)}...`);
     }
   }, [wallet.account]);
 
-  const handleViewDetails = (campaignId) => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    const interactionInput = document.getElementById('interactionCampaignId');
-    if (interactionInput) {
-      interactionInput.value = campaignId;
-      // Trigger fetchCampaignDetails with the selected ID
-      fetchCampaignDetails(campaignId);
+  const handleCampaignClick = (campaignId) => {
+    if (viewDetailsHandler) {
+      viewDetailsHandler(campaignId);
     }
   };
 
@@ -70,6 +78,7 @@ function App() {
           showMessage={showMessage}
           campaignDetails={campaignDetails}
           fetchCampaignDetails={fetchCampaignDetails}
+          registerViewDetailsHandler={registerViewDetailsHandler}
         />
       </div>
 
@@ -79,6 +88,7 @@ function App() {
           loading={loading}
           fetchAllCampaigns={fetchAllCampaigns}
           onViewDetails={handleViewDetails}
+          onCampaignClick={handleCampaignClick}
         />
       )}
     </div>
